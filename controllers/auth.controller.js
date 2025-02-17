@@ -3,16 +3,13 @@ import jwt from "jsonwebtoken";
 import bcrypt from "bcryptjs";
 import User from "../models/users.model.js";
 
-export const singUp = async (req, res, next) => {
+export const signUp = async (req, res, next) => {
   const session = await mongoose.startSession();
   session.startTransaction();
 
   try {
-    // loic to create new user
-
     const { name, email, password } = req.body;
 
-    // check if user exist
     const user = await User.findOne({ email });
 
     if (user) {
@@ -21,7 +18,6 @@ export const singUp = async (req, res, next) => {
       throw error;
     }
 
-    // hash password
     const salt = await bcrypt.genSalt(10);
     const hashedPassword = await bcrypt.hash(password, salt);
 
@@ -31,18 +27,23 @@ export const singUp = async (req, res, next) => {
       password: hashedPassword,
     });
 
-    const token = jwt.sign({ userId: newUser._id}, process.env.JWT_SECRET, {
+    const token = jwt.sign({ userId: newUser._id }, process.env.JWT_SECRET, {
       expiresIn: process.env.JWT_LIFETIME,
     });
 
     await session.commitTransaction();
     session.endSession();
 
+    res.cookie('accessToken', token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      maxAge: 1000 * 60 * 60 * 24,
+    });
+
     res.status(201).json({
       success: true,
       message: "User created successfully",
-      user: newUser[0],
-      token,
+      user: newUser,
     });
   } catch (error) {
     await session.abortTransaction();
@@ -51,7 +52,7 @@ export const singUp = async (req, res, next) => {
   }
 };
 
-export const singIn = async (req, res, next) => {
+export const signIn = async (req, res, next) => {
   try {
     const { email, password } = req.body;
 
@@ -71,22 +72,27 @@ export const singIn = async (req, res, next) => {
       throw error;
     }
 
-    const token = jwt.sign({ userId: user._id}, process.env.JWT_SECRET, {
+    const token = jwt.sign({ userId: user._id }, process.env.JWT_SECRET, {
       expiresIn: process.env.JWT_LIFETIME,
+    });
+
+    res.cookie('accessToken', token, {
+      httpOnly: false,
+      secure: process.env.NODE_ENV === 'production',
+      maxAge: 1000 * 60 * 60 * 24,
     });
 
     res.status(200).json({
       success: true,
       message: "User logged in successfully",
       user,
-      token,
-    })
+    });
   } catch (error) {
     next(error);
   }
 };
 
-export const singOut = async (req, res, next) => {
+export const signOut = async (req, res, next) => {
   try {
     res.cookie("token", "logout", {
       httpOnly: true,
@@ -100,3 +106,4 @@ export const singOut = async (req, res, next) => {
     next(error);
   }
 };
+
